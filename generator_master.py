@@ -65,108 +65,104 @@ def output_conv(in_channels, kernel_size=1, batch_norm=False):
 	layers.append(nn.Tanh())
 	return nn.Sequential(*layers)
 
-def fully_connected(max_channels=max_channels, num_classes=10):
-	fully_connected_layers = nn.Sequential(
-		nn.Linear(max_channels,max_channels*2)
-		nn.BatchNorm1d(max_channels*2)
-		nn.ReLu()
-		nn.Linear(max_channels*2,max_channels*4)
-		nn.BatchNorm1d(max_channels*4)
-		nn.ReLu()
-		nn.Linear(max_channels*4, num_classes)
-		nn.Sigmoid()
-		)
-	return fully_connected_layers
-	# input 256 features
-	# 1st hidden: 512
-	# 2nd hidden: 1024
-	# output: 10
-
-
-	model = torch.nn.Sequential(
-          torch.nn.Linear(D_in, H),
-          torch.nn.ReLU(),
-          torch.nn.Linear(H, D_out),
-        ).to(device)
-
+def fully_connected(max_channels=256, num_classes=10):
+    fully_connected_layers = nn.Sequential(
+        nn.Linear(4*4*max_channels/2,max_channels*4),
+        # nn.BatchNorm1d(max_channels*4),
+        nn.ReLU(True),
+        nn.Dropout(),
+        nn.Linear(max_channels*4,max_channels*4),
+        nn.ReLU(True),
+        nn.Linear(max_channels*4, num_classes),
+        nn.Softmax()
+        )
+    return fully_connected_layers
 
 # my code
 class unet(nn.Module):
-	def __init__(self, max_channels = 256, batch_norm=True, classification=True):
-		super(unet,self).__init__()
-		
-		#1st block (encoder 1)
-		# size of output: o = (i-k) +2p +1 -> 32 - 3 +2 + 1 = 32 need kernel size of 3 to keep image size konstant
-		self.conv1 = conv(1,max_channels/8,batch_norm=False) #TODO: why no batch norm for first convolution?
-		self.down1 = conv_downsampling(max_channels/8,max_channels/8)
+    def __init__(self, max_channels = 256, batch_norm=True, classification=True, num_classes=10):
+        super(unet,self).__init__()
 
-		# 2nd block (encoder 2)
-		self.conv2 = conv(max_channels/8,max_channels/4,batch_norm=batch_norm)
-		self.down2 = conv_downsampling(max_channels/4,max_channels/4)
+        self.max_channels=max_channels
+        
+        #1st block (encoder 1)
+        # size of output: o = (i-k) +2p +1 -> 32 - 3 +2 + 1 = 32 need kernel size of 3 to keep image size konstant
+        self.conv1 = conv(1,max_channels/8,batch_norm=False) #TODO: why no batch norm for first convolution?
+        self.down1 = conv_downsampling(max_channels/8,max_channels/8)
 
-		# 3rd block (encoder 3)
-		self.conv3 = conv(max_channels/4,max_channels/2,batch_norm=batch_norm)
-		self.down3 = conv_downsampling(max_channels/2,max_channels/2)
+        # 2nd block (encoder 2)
+        self.conv2 = conv(max_channels/8,max_channels/4,batch_norm=batch_norm)
+        self.down2 = conv_downsampling(max_channels/4,max_channels/4)
 
-		# 4rth block (bottleneck) -> attach fully connected layers here
-		self.conv4_1 = conv(max_channels/2, max_channels, batch_norm=batch_norm)
-		self.conv4_2 = conv(max_channels, max_channels, batch_norm=batch_norm)
+        # 3rd block (encoder 3)
+        self.conv3 = conv(max_channels/4,max_channels/2,batch_norm=batch_norm)
+        self.down3 = conv_downsampling(max_channels/2,max_channels/2)
 
-		# 5th block
-		self.up5 = conv_upsampling(max_channels,max_channels/2,batch_norm=batch_norm)
-		self.conv5 = conv(max_channels, max_channels/2, batch_norm=batch_norm)
+        # 4rth block (bottleneck) -> attach fully connected layers here
+        self.conv4_1 = conv(max_channels/2, max_channels, batch_norm=batch_norm)
+        self.conv4_2 = conv(max_channels, max_channels, batch_norm=batch_norm)
 
-		# 6th block
-		self.up6 = conv_upsampling(max_channels/2, max_channels/4, batch_norm=batch_norm)
-		self.conv6 = conv(max_channels/2, max_channels/4, batch_norm=batch_norm)
+        # 5th block
+        self.up5 = conv_upsampling(max_channels,max_channels/2,batch_norm=batch_norm)
+        self.conv5 = conv(max_channels, max_channels/2, batch_norm=batch_norm)
 
-		# 7th block (output block!!)
-		self.up7 = conv_upsampling(max_channels/4, max_channels/8, batch_norm=batch_norm)
-		self.conv7 = conv(max_channels/4, max_channels/8, batch_norm=batch_norm)
-		self.conv_out = output_conv(max_channels/8, batch_norm=False)
+        # 6th block
+        self.up6 = conv_upsampling(max_channels/2, max_channels/4, batch_norm=batch_norm)
+        self.conv6 = conv(max_channels/2, max_channels/4, batch_norm=batch_norm)
 
-		# TODO: this will not work this way -> have to flatten the features (compare AlexNet or sth similar, how many features...do we need to further downsample first?????)
-		if classification:
-			self.classifcation = fully_connected(max_channels=max_channels, num_classes=num_classes )
+        # 7th block (output block!!)
+        self.up7 = conv_upsampling(max_channels/4, max_channels/8, batch_norm=batch_norm)
+        self.conv7 = conv(max_channels/4, max_channels/8, batch_norm=batch_norm)
+        self.conv_out = output_conv(max_channels/8, batch_norm=False)
+
+        # TODO: this will not work this way -> have to flatten the features (compare AlexNet or sth similar, how many features...do we need to further downsample first?????)
+        if classification:
+            self.conv_class = conv(max_channels,max_channels/2, batch_norm=batch_norm)
+            self.classification = fully_connected(max_channels=max_channels, num_classes=num_classes)
 
 
 
 
-	def forward(self, x, classification = True):
-		horizontal_1 = self.conv1(x)
-		out = self.down1(horizontal_1)
+    def forward(self, x, classification = True):
+        horizontal_1 = self.conv1(x)
+        out = self.down1(horizontal_1)
 
-		horizontal_2 = self.conv2(out)
-		out = self.down2(horizontal_2)
+        horizontal_2 = self.conv2(out)
+        out = self.down2(horizontal_2)
 
-		horizontal_3 = self.conv3(out)
-		out = self.down3(horizontal_3)
+        horizontal_3 = self.conv3(out)
+        out = self.down3(horizontal_3)
 
-		features_for_classification = self.conv4_1(out)
-		out = self.conv4_2(features_for_classification)
+        features_for_classification = self.conv4_1(out)
+        out = self.conv4_2(features_for_classification)
 
-		# apply upsampling layer
-		out = self.up5(out)
-		# concatenate here and pass the concatenated tensor to next convolution layer
-		out = torch.cat([out, horizontal_3], dim=1)
-		out = self.conv5(out)
+        # apply upsampling layer
+        out = self.up5(out)
+        # concatenate here and pass the concatenated tensor to next convolution layer
+        out = torch.cat([out, horizontal_3], dim=1)
+        out = self.conv5(out)
 
-		out = self.up6(out)
-		out = torch.cat([out, horizontal_2], dim=1)
-		out = self.conv6(out)
+        out = self.up6(out)
+        out = torch.cat([out, horizontal_2], dim=1)
+        out = self.conv6(out)
 
-		out = self.up7(out)
-		out = torch.cat([out, horizontal_1], dim=1)
-		out = self.conv7(out)
-		col_pred = self.conv_out(out)
+        out = self.up7(out)
+        out = torch.cat([out, horizontal_1], dim=1)
+        out = self.conv7(out)
+        col_pred = self.conv_out(out)
 
-		if classification:
-			class_pred = self.classification(features_for_classification)
+        if classification:
+            out = self.conv_class(features_for_classification)
+            out = out.view(out.size(0), self.max_channels/2 * 4 * 4)
+            print('flattened: ', out.size())
+            class_pred = self.classification(out)
 
-		if classification:
-			return [col_pred, class_pred]
-		else:
-			return col_pred
+        if classification:
+            return [col_pred, class_pred]
+        else:
+            return col_pred
+
+
 
 	
 

@@ -44,23 +44,28 @@ def output_conv(in_channels, kernel_size=1, batch_norm=False):
     return nn.Sequential(*layers)
 
 
-def fully_connected(max_channels=max_channels, num_classes=10):
+def fully_connected(max_channels=256, num_classes=10, image_size = 32):
     fully_connected_layers = nn.Sequential(
-        nn.Linear(max_channels,max_channels*2)
-        nn.BatchNorm1d(max_channels*2)
-        nn.ReLu()
-        nn.Linear(max_channels*2,max_channels*4)
-        nn.BatchNorm1d(max_channels*4)
-        nn.ReLu()
-        nn.Linear(max_channels*4, num_classes)
-        nn.Sigmoid()
+        nn.Dropout()
+        nn.Linear(image_size/8*image_size/8*max_channels/2,max_channels*4),
+        # nn.BatchNorm1d(max_channels*4),
+        nn.ReLU(True),
+        nn.Dropout(),
+        nn.Linear(max_channels*4,max_channels*4),
+        nn.ReLU(True),
+        nn.Linear(max_channels*4, num_classes),
+        nn.Softmax()
         )
     return fully_connected_layers
 
 # my code
 class unet(nn.Module):
-    def __init__(self, max_channels = 256, batch_norm=True, classification=True):
+    def __init__(self, max_channels = 256, batch_norm=True, classification=True, num_classes=10, image_size = 32):
         super(unet,self).__init__()
+
+        self.max_channels = max_channels
+        self.image_size = image_size
+        self.classification = classification
         
         #1st block (encoder 1)
         # size of output: o = (i-k) +2p +1 -> 32 - 3 +2 + 1 = 32 need kernel size of 3 to keep image size konstant
@@ -79,8 +84,6 @@ class unet(nn.Module):
         self.conv4_1 = conv(max_channels/2, max_channels, batch_norm=batch_norm)
         self.conv4_2 = conv(max_channels, max_channels, batch_norm=batch_norm)
 
-        #TODO: add fully connected layers HERE!!!!
-
         # 5th block
         self.up5 = conv_upsampling(max_channels,max_channels/2,batch_norm=batch_norm)
         self.conv5 = conv(max_channels, max_channels/2, batch_norm=batch_norm)
@@ -94,14 +97,15 @@ class unet(nn.Module):
         self.conv7 = conv(max_channels/4, max_channels/8, batch_norm=batch_norm)
         self.conv_out = output_conv(max_channels/8, batch_norm=False)
 
-
-        # TODO: tanh, no batch_norm after last convolution
+        # TODO: this will not work this way -> have to flatten the features (compare AlexNet or sth similar, how many features...do we need to further downsample first?????)
         if classification:
-            self.classifcation = fully_connected(max_channels=max_channels, num_classes=num_classes )
+            self.conv_class = conv(max_channels,max_channels/2, batch_norm=batch_norm)
+            self.classification = fully_connected(max_channels=max_channels, num_classes=num_classes)
 
 
 
-    def forward(self, x, classification = True):
+
+    def forward(self, x):
         horizontal_1 = self.conv1(x)
         out = self.down1(horizontal_1)
 
@@ -129,16 +133,19 @@ class unet(nn.Module):
         out = self.conv7(out)
         col_pred = self.conv_out(out)
 
-        if classification:
-            class_pred = self.classification(features_for_classification)
+        if self.classification:
+            out = self.conv_class(features_for_classification)
+            out = out.view(out.size(0), self.max_channels/2 * 4 * 4)
+            print('flattened: ', out.size())
+            class_pred = self.classification(out)
 
-        if classification:
+        if self.classification:
             return [col_pred, class_pred]
         else:
             return col_pred
 
 
-model = unet()
+model = unet(classification=True)
 model.cuda()
 print(model)
 
@@ -149,7 +156,7 @@ example = example.type(torch.cuda.FloatTensor)
 print(example.type())
 print(example.size())
 col_pred, class_pred = model.forward(example)
-
+# col_pred = model.forward(example)
 print(col_pred.size())
 print(class_pred)
 
