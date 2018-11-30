@@ -61,12 +61,11 @@ def fully_connected(max_channels=256, num_classes=10, image_size = 32):
 
 # my code
 class unet(nn.Module):
-    def __init__(self, max_channels = 256, batch_norm=True, classification=True, num_classes=10, image_size = 32):
+    def __init__(self, max_channels = 256, batch_norm=True, num_classes=10, image_size = 32):
         super(unet,self).__init__()
 
         self.max_channels = max_channels
         self.image_size = image_size
-        self.classification = classification
         
         # encoder (shared arm between classification and colorization)
         #1st block (encoder 1)
@@ -108,19 +107,19 @@ class unet(nn.Module):
 
 
 
-    def forward(self, x, architecture='random'):
+    def forward(self, x, mode='random'):
 
-        # architecture defines if the forward pass results in class prediction or image colorization
-        # architecture = random (p=0.5), classification, colorization
-        if architecture=='random':
+        # mode defines if the forward pass results in class prediction or image colorization
+        # mode = random (p=0.5), classification, colorization
+        if mode=='random':
             decision = random.random()
             print(decision)
             # if random.random()<0.5:
             if decision<0.5:
-                architecture = 'classification'
+                mode = 'classification'
             else:
-                architecture = 'colorization'
-        print(architecture)
+                mode = 'colorization'
+        print(mode)
 
         horizontal_1 = self.conv1(x)
         out = self.down1(horizontal_1)
@@ -133,7 +132,7 @@ class unet(nn.Module):
 
         features_for_classification = self.conv4_1(out)
 
-        if architecture=='colorization':
+        if mode=='colorization':
             out = self.conv4_2(features_for_classification)
 
             # apply upsampling layer
@@ -153,7 +152,7 @@ class unet(nn.Module):
 
             return col_pred
 
-        if architecture=='classification':
+        if mode=='classification':
             out = self.conv_class(features_for_classification)
             out = out.view(out.size(0), self.max_channels/2 * 4 * 4)
             print('flattened: ', out.size())

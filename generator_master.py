@@ -61,12 +61,11 @@ def fully_connected(max_channels=256, num_classes=10, image_size = 32):
 
 # my code
 class unet(nn.Module):
-    def __init__(self, max_channels = 256, batch_norm=True, classification=True, num_classes=10, image_size = 32):
+    def __init__(self, max_channels = 256, batch_norm=True, num_classes=10, image_size = 32):
         super(unet,self).__init__()
 
         self.max_channels = max_channels
         self.image_size = image_size
-        self.classification = classification
         
         # encoder (shared arm between classification and colorization)
         #1st block (encoder 1)
