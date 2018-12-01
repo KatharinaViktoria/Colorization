@@ -28,7 +28,10 @@ from generator import unet
 ### TODO LIST ###
 # 
 # 2. load training data
-# 
+# extra: after each epoch run inference on a random batch of training data and save images
+# grab batch, run inference
+# convert predictions from Lab to RGB 
+# save as .jpg
 
 #---------------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ import numpy as np
 import random
 
 
-def conv(in_channels, out_channels, kernel_size=3, batch_norm = True):
+def conv(in_channels, out_channels, kernel_size=3, batch_norm=True):
     layers = []
     # convolution with kernel size 4, image size is conserved (stride = 1), bias
     layers.append(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size, stride=1, padding=1, bias=True))
@@ -45,7 +45,7 @@ def output_conv(in_channels, kernel_size=1, batch_norm=False):
     return nn.Sequential(*layers)
 
 
-def fully_connected(max_channels=256, num_classes=10, image_size = 32):
+def fully_connected(max_channels=256, num_classes=10, image_size=32):
     fully_connected_layers = nn.Sequential(
         nn.Dropout(),
         nn.Linear(image_size/8*image_size/8*max_channels/2,max_channels*4),
@@ -61,7 +61,7 @@ def fully_connected(max_channels=256, num_classes=10, image_size = 32):
 
 # my code
 class unet(nn.Module):
-    def __init__(self, max_channels = 256, batch_norm=True, num_classes=10, image_size = 32):
+    def __init__(self, max_channels = 256, batch_norm=True, num_classes=10, image_size=32):
         super(unet,self).__init__()
 
         self.max_channels = max_channels
@@ -105,13 +105,13 @@ class unet(nn.Module):
         self.classification = fully_connected(max_channels=max_channels, num_classes=num_classes)
 
 
-
-
     def forward(self, x, mode='random'):
 
         # mode defines if the forward pass results in class prediction or image colorization
         # mode = random (p=0.5), classification, colorization
-        if mode=='random':
+        # https://pytorch.org/tutorials/beginner/examples_nn/dynamic_net.html
+
+        if mode == 'random':
             decision = random.random()
             print(decision)
             # if random.random()<0.5:
@@ -132,7 +132,7 @@ class unet(nn.Module):
 
         features_for_classification = self.conv4_1(out)
 
-        if mode=='colorization':
+        if mode == 'colorization':
             out = self.conv4_2(features_for_classification)
 
             # apply upsampling layer
@@ -152,7 +152,7 @@ class unet(nn.Module):
 
             return col_pred
 
-        if mode=='classification':
+        if mode == 'classification':
             out = self.conv_class(features_for_classification)
             out = out.view(out.size(0), self.max_channels/2 * 4 * 4)
             print('flattened: ', out.size())
