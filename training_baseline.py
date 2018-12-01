@@ -20,24 +20,15 @@ import scipy.misc
 # TODO
 # dataloader
 # TODO
-# models
+# Models
 from pix2pix_models import *
 from generator import unet
 
 
 ### TODO LIST ###
-# 0. setup: GPU
-# 1. generate discriminator (PatchGAN) and generator (mode = 'colorization')
+# 
 # 2. load training data
-# 3.1 define loss functions
-# 3.2 optimizer (for both D and G), scheduler (?) 
-# 4. training loop
-# 4.1 log file: epoch, discriminator loss, generator losses (d and consistency) -> compare pix2pix?
-# 4.2 discriminator: forward prop, loss  -> backprop, weight update
-# 4.3 generator:  forward prop (! mode = 'colorization'), loss(es) -> backprop, weight update
-# TODO: for baseline training set mode/architecture to colorization for all forward props!
-
-# # 4.4 log losses, decide when to save models 
+# 
 
 #---------------------------------------------------------------------------------
 
@@ -67,7 +58,6 @@ print(G)
 # ToDO: Dataloader
 batch_size = 100
 
-
 # Loss
 # get ground truth tensors/label for GAN loss
 label_real = gt_GAN_loss(batch_size, True)
@@ -76,29 +66,83 @@ label_fake = gt_GAN_loss(batch_size, False)
 criterion_GAN = torch.nn.BCELoss()
 criterion_L1 = torch.nn.L1Loss()
 
+alpha = 1
+gamma = 100 # ref Jay
+
 # optimizer
 lr = 2.0e-4
 beta1 = 0.5
 beta2 = 0.999
-optim_G = optim.Adam(G.parameters(),lr=lr,betas=(beta1,beta2))
-optim_D = optim.Adam(D.parameters(),lr=lr,betas=(beta1,beta2))
+G_optimizer = optim.Adam(G.parameters(),lr=lr,betas=(beta1,beta2))
+D_optimizer = optim.Adam(D.parameters(),lr=lr,betas=(beta1,beta2))
 
 # log file, model dir
 model_dir = os.path.join(os.getcwd(),"baseline")
 if not os.path.exists(model_dir):
 	os.mkdirs(model_dir)
 
+n_epochs = 100
+# ToDO
+n_batches = 2 # TODO
+
 with open(os.path.join(model_dir,'losses.csv'), 'w') as writefile:
 
-        writer = csv.writer(writefile)
-        # TODO: what do we have to keep track of?
-        writer.writerow(['epoch', 'batch_num', 'training loss', 'top_5_ right', 'count all val'])
-        writefile.flush()
-        # command to write a new row in log file
-        # writer.writerow([epoch, batch_num, running_loss, top_5_pos, count_all])
-        # writefile.flush()
+		writer = csv.writer(writefile)
+		writer.writerow(['epoch', 'batch_num', 'D loss', 'G loss'])
+		writefile.flush()
+		# command to write a new row in log file
+		# writer.writerow([epoch, batch_num, running_loss, top_5_pos, count_all])
+		# writefile.flush()
+
+		for epoch in range(n_epochs):
+
+			# ToDo: load data
+			# get x 
+			# get y_col = y_real
+
+			for batch_num in range(n_batches)
+				## Train Discriminator
+				# Real input
+				D_optimizer.zero_grad()
+				D_pred_real = D.forward(y_real)
+				D_real_loss = criterion_GAN(D_pred_real, label_real)  # ones = true
+				D_real_loss.backward()
+				D_optimizer.step()
+
+				# Fake input
+				D_optimizer.zero_grad()
+				y_fake = G.forward(x, mode='colorization')
+				D_pred_fake = D.forward(y_fake)
+				D_fake_loss = criterion_GAN(D_pred_fake, label_fake)  # zeros = false/fake
+				D_fake_loss.backward()
+				D_optimizer.step()
 
 
+				# Train Generator
+				G_optimizer.zero_grad()
+				y_fake = G.forward(y_real, mode='colorization')
+				G_GAN_loss = criterion_GAN(y_fake, label_real)
+				G_L1 = criterion_L1(y_fake,y_real)
+				G_loss = alpha*G_GAN_loss + gamma*G_L1
+				G_loss.backward()
+				G_optimizer.step()
+
+				# logger
+				if batch%50 == 0:
+					writer.writerow([epoch, batch_num, (D_fake_loss+D_real_loss), G_loss])
+					writefile.flush()
+
+
+			## save model
+			if epoch>10:
+				savefile = "model.%d" % epoch
+				torch.save(model.state_dict(),os.path.join(model_dir, savefile))
+
+				## don't use validation for now
+
+
+			## 
+			gc.collect()
 
 
 
