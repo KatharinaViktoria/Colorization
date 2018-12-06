@@ -161,7 +161,7 @@ if __name__ == '__main__':
 	validation = False # inference
 	gpu = True
 	if gpu:
-		device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+		device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 	else:
 		device = "cpu"
 	print(device)
@@ -287,7 +287,7 @@ if __name__ == '__main__':
 			# plot(xs, ys, predicted.cpu().numpy(), colours,
 			# 	 'outputs/train_%d.png' % epoch)
 			plot_lab(xs, ys, outputs.detach().cpu().numpy(),
-				 'outputs/train_%d.png' % epoch)
+				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
 
 		
 		# plot training images
@@ -303,7 +303,7 @@ if __name__ == '__main__':
 		outfile = None
 		# if args.plot:
 		if plot_images:
-			outfile = 'outputs/test_%d.png' % epoch
+			outfile = os.path.join('outputs',experiment,'test_%d.png' % epoch)
 
 		val_loss, val_acc = run_validation_step(cnn,
 												criterion,
@@ -330,7 +330,7 @@ if __name__ == '__main__':
 	plt.legend()
 	plt.title("Loss")
 	plt.xlabel("Epochs")
-	plt.savefig("outputs/training_curve.png")
+	plt.savefig(os.path.join("outputs", experiment, "training_curve.png"))
 	plt.close()
 	# plt.clf()
 

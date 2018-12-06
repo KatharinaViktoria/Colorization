@@ -103,7 +103,7 @@ def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size
 		# correct += (predicted == labels.data).sum()
 
 	if plotpath: # only plot if a path is provided
-		plot_lab(x.cpu().numpy(), y_true.cpu().numpy(), y_fake.detach().cpu().numpy(), plotpath)
+		plot_lab(xs, ys, y_fake.detach().cpu().numpy(), plotpath)
 
 	val_loss = np.mean(losses)
 	val_acc = 0
@@ -256,10 +256,11 @@ if __name__ == '__main__':
 			G_optimizer.step()
 			
 			losses_G.append(G_loss.data[0])
-
+	
+		
 		# plot training images
 		if plot_images:
-			plot_lab(x.cpu().numpy(), y_true.cpu().numpy(), y_fake.detach().cpu().numpy(),
+			plot_lab(xs, ys, y_fake.detach().cpu().numpy(),
 				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
 
 		
@@ -269,6 +270,8 @@ if __name__ == '__main__':
 
 		train_losses_D.append(avg_loss_D)
 		train_losses_G.append(avg_loss_G)
+		# print(train_losses_G)
+		# print(train_losses_D)
 
 		time_elapsed = time.time() - start
 		print('Epoch [%d/%d], Loss_D: %.4f, Loss_G:, %.4f, Time (s): %d' % (
@@ -301,6 +304,9 @@ if __name__ == '__main__':
 			if epoch%5 == 0:
 				print('Saving model...')
 				torch.save(G.state_dict(), os.path.join(model_path,'model'+str(epoch)+'.weights'))
+	
+	# print(train_losses_G)
+	# print(train_losses_D)
 
 	# Plot training curve
 	plt.plot(train_losses_G, "ro-", label="Train")
