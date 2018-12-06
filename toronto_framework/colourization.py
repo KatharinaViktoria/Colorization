@@ -23,7 +23,7 @@ from load_data import load_cifar10
 from preprocessing import *
 from models import *
 import unet
-import generator
+import generator_copy
 
 
 HORSE_CATEGORY = 7
@@ -87,6 +87,7 @@ def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size,
 	for i, (xs, ys) in enumerate(get_batch(x_test_lab, y_test_lab, batch_size)):
 		images, labels = get_torch_vars(xs, ys, gpu)
 		outputs = cnn(images)
+		# outputs = cnn.forward(images, mode='colorization')
 
 		# val_loss = compute_loss(criterion,
 		# 						outputs,
@@ -148,12 +149,13 @@ if __name__ == '__main__':
 	torch.set_num_threads(5)
 	
 	# SET ARGUMENTS
-	model = "UNet_class" # "CNN", "DUNet", "UNet"
+	experiment = "Unet_256_animals"
+	model = "UNet" # "CNN", "DUNet", "UNet"
 	batch_size = 100
 	plot_images = True
-	n_epochs = 30
+	n_epochs = 50
 	save_model = True
-	model_path = os.path.join("./models/", model)
+	model_path = os.path.join("./models", experiment)
 	if not os.path.exists(model_path):
 		os.makedirs(model_path)
 	validation = False # inference
@@ -167,7 +169,10 @@ if __name__ == '__main__':
 	kernel_size = 3
 	lr = 0.001
 	seed = 0
-	
+
+	# Create the outputs folder if not created already
+	if not os.path.exists(os.path.join("./outputs",experiment)):
+		os.makedirs(os.path.join("./outputs",experiment))
 	# Numpy random seed
 	npr.seed(seed)
 
@@ -186,8 +191,8 @@ if __name__ == '__main__':
 	else: # model == "DUNet":
 		cnn = DilatedUNet(kernel_size, num_filters, num_colours)
 	'''
-	# cnn = unet.UNet(n_channels=1, n_classes=2)
-	cnn = generator.unet()
+	cnn = unet.UNet(n_channels=1, n_classes=2)
+	# cnn = generator_copy.unet()
 	print(cnn)
 
 	# LOSS FUNCTION
@@ -200,18 +205,16 @@ if __name__ == '__main__':
 	(x_train, y_train), (x_test, y_test) = load_cifar10()
 
 	print("Transforming data...")
-	x_train_lab, y_train_lab = process_lab(x_train, y_train)
+	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=[bird, horse, cat, deer])
 	print(x_train_lab.shape)
 	print(y_train_lab.shape)
 	# train_rgb, train_grey = process(x_train, y_train)
 	# train_rgb_cat = get_rgb_cat(train_rgb, colours)
-	x_test_lab, y_test_lab = process_lab(x_test, y_test)
+	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=[bird, horse, cat, deer])
 	# test_rgb, test_grey = process(x_test, y_test)
 	# test_rgb_cat = get_rgb_cat(test_rgb, colours)
 	
-	# Create the outputs folder if not created already
-	if not os.path.exists("outputs"):
-		os.makedirs("outputs")
+	
 
 	# Run validation only
 	# if args.valid:
@@ -236,7 +239,7 @@ if __name__ == '__main__':
 		print('Sample output available at: %s' % img_path)
 		exit(0)
 	'''
-	'''
+	
 	print("Beginning training ...")
 
 	# if args.gpu: cnn.cuda()
@@ -263,6 +266,7 @@ if __name__ == '__main__':
 			# Forward + Backward + Optimize
 			optimizer.zero_grad()
 			outputs = cnn(images)
+			# outputs = cnn.forward(images, mode='colorization')
 
 			# loss = compute_loss(criterion,
 			# 					outputs,
@@ -334,5 +338,5 @@ if __name__ == '__main__':
 	if save_model:
 		print('Saving model...')
 		torch.save(cnn.state_dict(), os.path.join(model_path,'model.weights'))
-	'''
+	
 	

@@ -123,7 +123,7 @@ with open(os.path.join(model_dir,'losses.csv'), 'w') as writefile:
 
 				# Train Generator
 				G_optimizer.zero_grad()
-				y_fake = G.forward(y_real, mode='colorization')
+				y_fake = G.forward(x, mode='colorization')
 				G_GAN_loss = criterion_GAN(y_fake, label_real)
 				G_L1 = criterion_L1(y_fake,y_real)
 				G_loss = alpha*G_GAN_loss + gamma*G_L1

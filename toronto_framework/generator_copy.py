@@ -119,7 +119,7 @@ class unet(nn.Module):
                 mode = 'classification'
             else:
                 mode = 'colorization'
-        print(mode)
+        # print(mode)
 
         horizontal_1 = self.conv1(x)
         out = self.down1(horizontal_1)

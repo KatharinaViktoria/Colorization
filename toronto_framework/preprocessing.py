@@ -35,14 +35,24 @@ truck = 9
 def process_lab(xs,ys,max_pixel=256.0, categories=[horse]):
     xs = xs / max_pixel # normalize to 1
     # xs = xs[np.where(ys == horse)[0], :, :, :]
-    xs = xs[np.where(ys == categories[0])[0], :, :, :]
-    npr.shuffle(xs)
+    xs_red = xs[np.where(ys == categories[0])[0], :, :, :]
+    print(xs_red.shape)
+    if len(categories)>1:
+      for cat in range(1,len(categories)):
+        xs_cat = xs[np.where(ys == categories[cat])[0], :, :, :]
+        print(xs_cat.shape)
+        xs_red = np.concatenate((xs_red,xs_cat), axis=0)
+        print(xs_red.shape)
+        # print(xs_cat.shape)
+        # xs_red.expand(xs_cat)
+        
+    npr.shuffle(xs_red)
     
     # transfer RGB to lab color space
-    xs_l_channel = np.zeros([xs.shape[0],1,xs.shape[2], xs.shape[3]])
-    xs_ab_channel = np.zeros([xs.shape[0],2,xs.shape[2], xs.shape[3]])
-    for image_iter in range(xs.shape[0]):
-      image_to_convert = xs[image_iter,:,:,:]
+    xs_l_channel = np.zeros([xs_red.shape[0],1,xs_red.shape[2], xs_red.shape[3]])
+    xs_ab_channel = np.zeros([xs_red.shape[0],2,xs_red.shape[2], xs_red.shape[3]])
+    for image_iter in range(xs_red.shape[0]):
+      image_to_convert = xs_red[image_iter,:,:,:]
       image_to_convert = np.transpose(image_to_convert, [1,2,0])
       image_lab = color.rgb2lab(image_to_convert)
       l_channel = np.transpose(np.expand_dims(image_lab[:,:,0]/100, axis=2),(2,0,1))
@@ -184,10 +194,16 @@ def plot_lab(input, gt, output, path, RGB=True):
     gt = np.transpose(gt[:10,:3,:,:], [0,2,3,1])
     predicted = np.transpose(output[:10,:3,:,:], [0,2,3,1])
     
+    # if RGB:
+    #   grey = (grey*100)
+    #   gt = ((gt*256)-128)
+    #   predicted = ((predicted*256)-128)
+
+    # if False:
     if RGB:
-      grey = grey*100
-      gt = (gt*256)-128
-      predicted = (predicted*256)-128
+      grey = (grey*100).astype(int)
+      gt = ((gt*256)-128).astype(int)
+      predicted = ((predicted*256)-128).astype(int)
 
     gt = np.concatenate((grey,gt), axis=3)
     gt = np.hstack(gt)
@@ -195,9 +211,14 @@ def plot_lab(input, gt, output, path, RGB=True):
     predicted = np.hstack(predicted)
 
     if RGB:
-      predicted = color.lab2rgb(predicted)
-      gt = color.lab2rgb(gt)
-      
+      predicted = color.lab2rgb(predicted)/255
+      gt = color.lab2rgb(gt)/255
+     
+    # if RGB:
+    #   predicted = color.lab2rgb(predicted)
+    #   gt = color.lab2rgb(gt)
+     
+
     grey =np.hstack(np.tile(grey, [1,1,1,3]))/100
     img = np.vstack([grey,gt,predicted])
     
