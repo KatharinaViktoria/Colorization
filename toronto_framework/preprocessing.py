@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 from skimage import io, color
 from load_data import load_cifar10
+import random
 
 # CATEGORIES
 airplane = 0
@@ -61,6 +62,37 @@ def process_lab(xs,ys,max_pixel=256.0, categories=[horse]):
       xs_ab_channel[image_iter,:,:,:] = ab_channel
 
     return xs_l_channel, xs_ab_channel
+
+def process_classification(xs,ys,max_pixel=256.0):
+    xs = xs / max_pixel # normalize to 1
+    
+    # transfer RGB to lab color space
+    xs_lab = np.zeros(xs.shape)
+    for image_iter in range(xs.shape[0]):
+      image_to_convert = xs[image_iter,:,:,:]
+      image_to_convert = np.transpose(image_to_convert, [1,2,0]) # transpose from Ch,R,C to R,C,Ch
+      image_lab = color.rgb2lab(image_to_convert)
+      image_lab = np.transpose(image_lab, (2,0,1))# transpose image back to Ch, R, C
+      xs_lab[image_iter,:,:,:] = image_lab
+    
+    # one-hot encoding labels
+    # ys_one_hot = np.zeros([len(ys), 10])
+    # for i in range(len(ys)):
+    #   ys_one_hot[i,ys[i]] = 1
+    # print(ys_one_hot.shape)
+    ys_one_hot = ys
+
+    # shuffle
+    xs_lab = xs_lab[:,1,:,:]
+    print(xs_lab.shape)
+    xs_lab = np.expand_dims(xs_lab, axis=1)
+    print(xs_lab.shape)
+    p = npr.permutation(len(ys))
+    xs_lab = xs_lab[p]
+    ys_one_hot = ys_one_hot[p]
+    ys_one_hot = ys_one_hot[:,0]
+    
+    return xs_lab, ys_one_hot
 
 def get_rgb_cat(xs, colours):
     """
@@ -157,6 +189,26 @@ def get_batch(x, y, batch_size):
         batch_x = x[i:i+batch_size, :,:,:]
         batch_y = y[i:i+batch_size, :,:,:]
         yield (batch_x, batch_y)
+
+def get_batch_classification(x, y, batch_size):
+    '''
+    Generated that yields batches of data
+
+    Args:
+      x: input values
+      y: output values
+      batch_size: size of each batch
+    Yields:
+      batch_x: a batch of inputs of size at most batch_size
+      batch_y: a batch of outputs of size at most batch_size
+    '''
+    N = np.shape(x)[0]
+    assert N == np.shape(y)[0]
+    for i in range(0, N, batch_size):
+        batch_x = x[i:i+batch_size, :,:,:]
+        batch_y = y[i:i+batch_size]
+        yield (batch_x, batch_y)
+
 
 def plot(input, gtlabel, output, colours, path):
     """

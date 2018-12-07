@@ -27,11 +27,8 @@ import unet
 import generator_copy
 from pix2pix_models_copy import *
 
-
-
-HORSE_CATEGORY = 7
-
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(device)
 ######################################################################
 # Torch Helper
 ######################################################################
@@ -40,14 +37,8 @@ def get_torch_vars(xs, ys, gpu=False):
 	"""
 	Helper function to convert numpy arrays to pytorch tensors.
 	If GPU is used, move the tensors to GPU.
-
-	Args:
-	  xs (float numpy tenosor): greyscale input
-	  ys (int numpy tenosor): categorical labels 
-	  gpu (bool): whether to move pytorch tensor to GPU
-	Returns:
-	  Variable(xs), Variable(ys)
 	"""
+
 	xs = torch.from_numpy(xs).float()
 	ys = torch.from_numpy(ys).float()
 	# ys = torch.from_numpy(ys).long()
@@ -58,30 +49,6 @@ def get_torch_vars(xs, ys, gpu=False):
 		ys = torch.tensor(ys, device = device)
 	return Variable(xs), Variable(ys)
 
-def compute_loss(criterion, outputs, labels, batch_size, num_colours):
-	"""
-	Helper function to compute the loss. Since this is a pixelwise
-	prediction task we need to reshape the output and ground truth
-	tensors into a 2D tensor before passing it in to the loss criteron.
-
-	Args:
-	  criterion: pytorch loss criterion
-	  outputs (pytorch tensor): predicted labels from the model
-	  labels (pytorch tensor): ground truth labels
-	  batch_size (int): batch size used for training
-	  num_colours (int): number of colour categories
-	Returns:
-	  pytorch tensor for loss
-	"""
-
-	loss_out = outputs.transpose(1,3) \
-					  .contiguous() \
-					  .view([batch_size*32*32, num_colours])
-	loss_lab = labels.transpose(1,3) \
-					  .contiguous() \
-					  .view([batch_size*32*32])
-	return criterion(loss_out, loss_lab)
-
 def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size,
 						colour, plotpath=None):
 	correct = 0.0
@@ -90,17 +57,14 @@ def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size
 	for i, (xs, ys) in enumerate(get_batch(x_test_lab, y_test_lab, batch_size)):
 		x, y_true = get_torch_vars(xs, ys, gpu)
 
-		y_fake = G.forward(x)
+		# y_fake = G.forward(x)
+		y_fake = G.forward(x, mode='colorization')
 		D_pred_fake = torch.mean(torch.mean(D.forward(y_fake), 2), 2)
 		G_GAN_loss = criterion_GAN(D_pred_fake, label_real)
 		G_L1 = criterion_L1(y_fake,y_true)
 		G_loss = alpha*G_GAN_loss + gamma*G_L1
 		
 		losses.append(G_loss.data[0])
-
-		# _, predicted = torch.max(outputs.data, 1, keepdim=True)
-		# total += labels.size(0) * 32 * 32
-		# correct += (predicted == labels.data).sum()
 
 	if plotpath: # only plot if a path is provided
 		plot_lab(xs, ys, y_fake.detach().cpu().numpy(), plotpath)
@@ -128,8 +92,9 @@ if __name__ == '__main__':
 	torch.set_num_threads(5)
 	
 	# SET ARGUMENTS-------------------------------------------------------
-	experiment = "GAN_animals_firstTest"
-	model = "UNet" # "CNN", "DUNet", "UNet"
+	experiment = "GAN__cutstomUNet_all"
+	# model = "UNet" # "CNN", "DUNet", "UNet"
+	categories = [airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck]
 	batch_size = 10
 	plot_images = True
 	n_epochs = 50
@@ -138,16 +103,12 @@ if __name__ == '__main__':
 	if not os.path.exists(model_path):
 		os.makedirs(model_path)
 	validation = False # inference
-	gpu = True
-	if gpu:
-		device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-	else:
-		device = "cpu"
-	print(device)
 	num_filters = 128 
 	kernel_size = 3
-	lr = 0.001
 	seed = 0
+	lr = 2.0e-4
+	beta1 = 0.5
+	beta2 = 0.999
 
 	# Create the outputs folder if not created already
 	if not os.path.exists(os.path.join("./outputs",experiment)):
@@ -157,9 +118,9 @@ if __name__ == '__main__':
 
 	# LOAD THE COLOURS CATEGORIES
 	# colours = np.load(args.colours)[0]
-	colours = np.load('colours/colour_kmeans24_cat7.npy')[0]
+	# colours = np.load('colours/colour_kmeans24_cat7.npy')[0]
 	# num_colours = np.shape(colours)[0]
-	num_colours = 2
+	num_colours = 2 # number of output channels
 
 	#----------INITIALIZE NETWORKS, LOSSES, AND DATA-----------------------------
 	# Discriminator 
@@ -168,8 +129,8 @@ if __name__ == '__main__':
 	print(D)
 
 	# Generator
-	G = unet.UNet(n_channels=1, n_classes=2)
-	# cnn = generator_copy.unet()
+	# G = unet.UNet(n_channels=1, n_classes=2)
+	G = generator_copy.unet()
 	G = G.to(device)
 	print(G)
 
@@ -191,20 +152,20 @@ if __name__ == '__main__':
 	D_optimizer = optim.Adam(D.parameters(),lr=lr,betas=(beta1,beta2))
 
 
-	# DATA
+	#  LOAD DATA
 	print("Loading data...")
 	(x_train, y_train), (x_test, y_test) = load_cifar10()
 
-	print("Transforming data...")
-	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=[bird, horse, cat, deer])
+	# preprocess data to lab color space and gpu tensors
+	print("Transforming data...") 
+	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=categories)
 	print(x_train_lab.shape)
 	print(y_train_lab.shape)
-	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=[bird, horse, cat, deer])
+	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=categories)
 
 	
 	print("Beginning training ...")
 
-	# if args.gpu: cnn.cuda()
 	
 	start = time.time()
 
@@ -212,7 +173,7 @@ if __name__ == '__main__':
 	train_losses_G = []
 	valid_losses_G = []
 	valid_accs = []
-	# for epoch in range(args.epochs):
+	
 	for epoch in range(n_epochs):
 		# Train the Model
 		D.train()
@@ -236,7 +197,8 @@ if __name__ == '__main__':
 
 			# fake input
 			D_optimizer.zero_grad()
-			y_fake = G.forward(x)
+			# y_fake = G.forward(x)
+			y_fake = G.forward(x, mode='colorization')
 			D_pred_fake = torch.mean(torch.mean(D.forward(y_fake), 2), 2)
 			D_fake_loss = criterion_GAN(D_pred_fake, label_fake)  # zeros = false/fake
 			D_fake_loss.backward()
@@ -247,7 +209,8 @@ if __name__ == '__main__':
 
 			# Train generator
 			G_optimizer.zero_grad()
-			y_fake = G.forward(x)
+			# y_fake = G.forward(x)
+			y_fake = G.forward(x, mode='colorization')
 			D_pred_fake = torch.mean(torch.mean(D.forward(y_fake), 2), 2)
 			G_GAN_loss = criterion_GAN(D_pred_fake, label_real)
 			G_L1 = criterion_L1(y_fake,y_true)
@@ -270,8 +233,6 @@ if __name__ == '__main__':
 
 		train_losses_D.append(avg_loss_D)
 		train_losses_G.append(avg_loss_G)
-		# print(train_losses_G)
-		# print(train_losses_D)
 
 		time_elapsed = time.time() - start
 		print('Epoch [%d/%d], Loss_D: %.4f, Loss_G:, %.4f, Time (s): %d' % (
@@ -282,7 +243,7 @@ if __name__ == '__main__':
 		D.eval()
 
 		outfile = None
-		# if args.plot:
+
 		if plot_images:
 			outfile = os.path.join('outputs',experiment,'test_%d.png' % epoch)
 
@@ -305,9 +266,6 @@ if __name__ == '__main__':
 				print('Saving model...')
 				torch.save(G.state_dict(), os.path.join(model_path,'model'+str(epoch)+'.weights'))
 	
-	# print(train_losses_G)
-	# print(train_losses_D)
-
 	# Plot training curve
 	plt.plot(train_losses_G, "ro-", label="Train")
 	plt.plot(valid_losses_G, "go-", label="Validation")
@@ -316,8 +274,7 @@ if __name__ == '__main__':
 	plt.xlabel("Epochs")
 	plt.savefig(os.path.join("outputs",experiment, "training_curve_G.png"))
 	plt.close()
-	# plt.clf()
-
+	
 	plt.plot(train_losses_D, "ro-", label="Train")
 	plt.legend()
 	plt.title("Loss")
@@ -325,7 +282,6 @@ if __name__ == '__main__':
 	plt.savefig(os.path.join("outputs",experiment, "training_curve_D.png"))
 	plt.close()
 
-	# if args.checkpoint:
 	if save_model:
 		print('Saving model...')
 		torch.save(G.state_dict(), os.path.join(model_path,'model.weights'))

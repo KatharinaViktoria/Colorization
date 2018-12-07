@@ -1,7 +1,3 @@
-"""
-Colourization of CIFAR-10 Horses via classification.
-"""
-
 from __future__ import print_function
 import argparse
 import os
@@ -24,9 +20,6 @@ from preprocessing import *
 from models import *
 import unet
 import generator_copy
-
-
-HORSE_CATEGORY = 7
 
 
 ######################################################################
@@ -89,11 +82,6 @@ def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size,
 		outputs = cnn(images)
 		# outputs = cnn.forward(images, mode='colorization')
 
-		# val_loss = compute_loss(criterion,
-		# 						outputs,
-		# 						labels,
-		# 						batch_size=batch_size,
-		# 						num_colours=num_colours)
 		val_loss = criterion(outputs,labels)
 		losses.append(val_loss.data[0])
 
@@ -114,42 +102,12 @@ def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size,
 ######################################################################
 
 if __name__ == '__main__':
-	'''
-	parser = argparse.ArgumentParser(description="Train colourization")
-	parser.add_argument('--gpu', action='store_true', default=False,
-						help="Use GPU for training")
-	parser.add_argument('--valid', action="store_true", default=False,
-						help="Perform validation only (don't train)")
-	parser.add_argument('--checkpoint', default="",
-						help="Model file to load and save")
-	parser.add_argument('--plot', action="store_true", default=False,
-						help="Plot outputs every epoch during training")
-	parser.add_argument('-c', '--colours',
-						default='colours/colour_kmeans24_cat7.npy',
-						help="Discrete colour clusters to use")
-	parser.add_argument('-m', '--model', choices=["CNN", "UNet", "DUNet"],
-						help="Model to run")
-	parser.add_argument('-k', '--kernel', default=3, type=int,
-						help="Convolution kernel size")
-	parser.add_argument('-f', '--num_filters', default=32, type=int,
-						help="Base number of convolution filters")
-	parser.add_argument('-l', '--learn_rate', default=0.001, type=float,
-						help="Learning rate")
-	parser.add_argument('-b', '--batch_size', default=100, type=int,
-						help="Batch size")
-	parser.add_argument('-e', '--epochs', default=25, type=int,
-						help="Number of epochs to train")
-	parser.add_argument('-s', '--seed', default=0, type=int,
-						help="Numpy random seed")
-
-	args = parser.parse_args()
-	'''
-
 	# Set the maximum number of threads to prevent crash in Teaching Labs
 	torch.set_num_threads(5)
 	
 	# SET ARGUMENTS
-	experiment = "Unet_256_animals"
+	experiment = "Unet_256_all"
+	categories = [airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck]
 	model = "UNet" # "CNN", "DUNet", "UNet"
 	batch_size = 100
 	plot_images = True
@@ -167,8 +125,11 @@ if __name__ == '__main__':
 	print(device)
 	num_filters = 128 
 	kernel_size = 3
-	lr = 0.001
 	seed = 0
+	# optimizer
+	lr = 2.0e-4
+	beta1 = 0.5
+	beta2 = 0.999
 
 	# Create the outputs folder if not created already
 	if not os.path.exists(os.path.join("./outputs",experiment)):
@@ -177,9 +138,7 @@ if __name__ == '__main__':
 	npr.seed(seed)
 
 	# LOAD THE COLOURS CATEGORIES
-	# colours = np.load(args.colours)[0]
-	colours = np.load('colours/colour_kmeans24_cat7.npy')[0]
-	# num_colours = np.shape(colours)[0]
+	colours = np.load('colours/colour_kmeans24_cat7.npy')[0] # not neede but will break the code if removed....
 	num_colours = 2
 
 	# LOAD THE MODEL
@@ -198,22 +157,17 @@ if __name__ == '__main__':
 	# LOSS FUNCTION
 	# criterion = nn.CrossEntropyLoss()
 	criterion = nn.L1Loss()
-	optimizer = torch.optim.Adam(cnn.parameters(), lr=lr)
+	optimizer = torch.optim.Adam(cnn.parameters(), lr=lr,betas=(beta1,beta2))
 
 	# DATA
 	print("Loading data...")
 	(x_train, y_train), (x_test, y_test) = load_cifar10()
 
 	print("Transforming data...")
-	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=[bird, horse, cat, deer])
+	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=categories)
 	print(x_train_lab.shape)
 	print(y_train_lab.shape)
-	# train_rgb, train_grey = process(x_train, y_train)
-	# train_rgb_cat = get_rgb_cat(train_rgb, colours)
-	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=[bird, horse, cat, deer])
-	# test_rgb, test_grey = process(x_test, y_test)
-	# test_rgb_cat = get_rgb_cat(test_rgb, colours)
-	
+	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=categories)
 	
 
 	# Run validation only
@@ -255,9 +209,7 @@ if __name__ == '__main__':
 		# Train the Model
 		cnn.train() # Change model to 'train' mode
 		losses = []
-		# for i, (xs, ys) in enumerate(get_batch(train_grey,
-		#                                        train_rgb_cat,
-		#                                        args.batch_size)):
+
 		for i, (xs, ys) in enumerate(get_batch(x_train_lab,
 											   y_train_lab,
 											   batch_size)):
@@ -267,25 +219,13 @@ if __name__ == '__main__':
 			optimizer.zero_grad()
 			outputs = cnn(images)
 			# outputs = cnn.forward(images, mode='colorization')
-
-			# loss = compute_loss(criterion,
-			# 					outputs,
-			# 					labels,
-			# 					batch_size=batch_size,
-			# 					num_colours=num_colours)
 			loss = criterion(outputs,labels)
-			# labels = labels.type(torch.cuda.FloatTensor)
-			# loss = criterion(outputs, labels)
 			loss.backward()
 			optimizer.step()
 			losses.append(loss.data[0])
 
 		# plot training images
-		# if args.plot:
 		if plot_images:
-			# _, predicted = torch.max(outputs.data, 1, keepdim=True)
-			# plot(xs, ys, predicted.cpu().numpy(), colours,
-			# 	 'outputs/train_%d.png' % epoch)
 			plot_lab(xs, ys, outputs.detach().cpu().numpy(),
 				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
 
@@ -301,7 +241,6 @@ if __name__ == '__main__':
 		cnn.eval()  # Change model to 'eval' mode (BN uses moving mean/var).
 
 		outfile = None
-		# if args.plot:
 		if plot_images:
 			outfile = os.path.join('outputs',experiment,'test_%d.png' % epoch)
 
@@ -332,8 +271,7 @@ if __name__ == '__main__':
 	plt.xlabel("Epochs")
 	plt.savefig(os.path.join("outputs", experiment, "training_curve.png"))
 	plt.close()
-	# plt.clf()
-
+	
 	# if args.checkpoint:
 	if save_model:
 		print('Saving model...')

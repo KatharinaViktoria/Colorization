@@ -55,7 +55,7 @@ def fully_connected(max_channels=256, num_classes=10, image_size=32):
         nn.Linear(max_channels*4,max_channels*4),
         nn.ReLU(True),
         nn.Linear(max_channels*4, num_classes),
-        nn.Softmax()
+        # nn.Softmax()
         )
     return fully_connected_layers
 
