@@ -63,6 +63,32 @@ def process_lab(xs,ys,max_pixel=256.0, categories=[horse]):
 
     return xs_l_channel, xs_ab_channel
 
+def process_lab_class(xs,ys,max_pixel=256.0):
+    xs = xs / max_pixel # normalize to 1
+    
+    # transfer RGB to lab color space
+    xs_l_channel = np.zeros([xs.shape[0],1,xs.shape[2], xs.shape[3]])
+    xs_ab_channel = np.zeros([xs.shape[0],2,xs.shape[2], xs.shape[3]])
+    for image_iter in range(xs.shape[0]):
+      image_to_convert = xs[image_iter,:,:,:]
+      image_to_convert = np.transpose(image_to_convert, [1,2,0])
+      image_lab = color.rgb2lab(image_to_convert)
+      l_channel = np.transpose(np.expand_dims(image_lab[:,:,0]/100, axis=2),(2,0,1))
+      xs_l_channel[image_iter,:,:,:] = l_channel
+      ab_channel = np.transpose((image_lab[:,:,1:3]+128)/256, (2,0,1))
+      xs_ab_channel[image_iter,:,:,:] = ab_channel
+
+    # shuffling
+    ys = ys[:,0]
+    p = npr.permutation(len(ys))
+    ys = ys[p]
+    xs_l_channel = xs_l_channel[p]
+    xs_ab_channel = xs_ab_channel[p]
+    print(xs_l_channel.shape)
+    print(xs_ab_channel.shape)
+    print(ys.shape)
+    return xs_l_channel, xs_ab_channel, ys
+
 def process_classification(xs,ys,max_pixel=256.0):
     xs = xs / max_pixel # normalize to 1
     
@@ -75,11 +101,6 @@ def process_classification(xs,ys,max_pixel=256.0):
       image_lab = np.transpose(image_lab, (2,0,1))# transpose image back to Ch, R, C
       xs_lab[image_iter,:,:,:] = image_lab
     
-    # one-hot encoding labels
-    # ys_one_hot = np.zeros([len(ys), 10])
-    # for i in range(len(ys)):
-    #   ys_one_hot[i,ys[i]] = 1
-    # print(ys_one_hot.shape)
     ys_one_hot = ys
 
     # shuffle
@@ -208,7 +229,21 @@ def get_batch_classification(x, y, batch_size):
         batch_x = x[i:i+batch_size, :,:,:]
         batch_y = y[i:i+batch_size]
         yield (batch_x, batch_y)
-
+def get_batch_col_class(x, y_col, y_class, batch_size):
+    '''
+    Yields:
+      batch_x: a batch of inputs of size at most batch_size
+      batch_y_col: a batch of outputs of size at most batch_size
+      batch_y_class: a batch of outputs of size at most batch_size
+    '''
+    N = np.shape(x)[0]
+    assert N == np.shape(y_col)[0]
+    assert N == np.shape(y_class)[0]
+    for i in range(0, N, batch_size):
+        batch_x = x[i:i+batch_size, :,:,:]
+        batch_y_col = y_col[i:i+batch_size, :,:,:]
+        batch_y_class = y_class[i:i+batch_size]
+        yield (batch_x, batch_y_col, batch_y_class)
 
 def plot(input, gtlabel, output, colours, path):
     """
