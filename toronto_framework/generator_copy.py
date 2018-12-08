@@ -155,7 +155,6 @@ class unet(nn.Module):
         if mode == 'classification':
             out = self.conv_class(features_for_classification)
             out = out.view(out.size(0), self.max_channels/2 * 4 * 4)
-            print('flattened: ', out.size())
             class_pred = self.classification(out)
             return class_pred
 

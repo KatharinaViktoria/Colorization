@@ -115,62 +115,6 @@ def process_classification(xs,ys,max_pixel=256.0):
     
     return xs_lab, ys_one_hot
 
-def get_rgb_cat(xs, colours):
-    """
-    Get colour categories given RGB values. This function doesn't
-    actually do the work, instead it splits the work into smaller
-    chunks that can fit into memory, and calls helper function
-    _get_rgb_cat
-
-    Args:
-      xs: float numpy array of RGB images in [B, C, H, W] format
-      colours: numpy array of colour categories and their RGB values
-    Returns:
-      result: int numpy array of shape [B, 1, H, W]
-    """
-    if np.shape(xs)[0] < 100:
-        return _get_rgb_cat(xs)
-    batch_size = 100
-    nexts = []
-    for i in range(0, np.shape(xs)[0], batch_size):
-        next = _get_rgb_cat(xs[i:i+batch_size,:,:,:], colours)
-        nexts.append(next)
-    result = np.concatenate(nexts, axis=0)
-    return result
-
-def _get_rgb_cat(xs, colours):
-    """
-    Get colour categories given RGB values. This is done by choosing
-    the colour in `colours` that is the closest (in RGB space) to
-    each point in the image `xs`. This function is a little memory
-    intensive, and so the size of `xs` should not be too large.
-
-    Args:
-      xs: float numpy array of RGB images in [B, C, H, W] format
-      colours: numpy array of colour categories and their RGB values
-    Returns:
-      result: int numpy array of shape [B, 1, H, W]
-    """
-    num_colours = np.shape(colours)[0]
-    xs = np.expand_dims(xs, 0)
-    cs = np.reshape(colours, [num_colours,1,3,1,1])
-    dists = np.linalg.norm(xs-cs, axis=2) # 2 = colour axis
-    cat = np.argmin(dists, axis=0)
-    cat = np.expand_dims(cat, axis=1)
-    return cat
-
-def get_cat_rgb(cats, colours):
-    """
-    Get RGB colours given the colour categories
-
-    Args:
-      cats: integer numpy array of colour categories
-      colours: numpy array of colour categories and their RGB values
-    Returns:
-      numpy tensor of RGB colours
-    """
-    return colours[cats]
-
 def process(xs, ys, max_pixel=256.0, categories = [horse]):
     """
     Pre-process CIFAR10 images by taking only the horse category,

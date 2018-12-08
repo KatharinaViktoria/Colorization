@@ -76,29 +76,38 @@ def get_torch_vars(xs, ys_col, ys_class, gpu=False):
 
 	return Variable(xs), Variable(ys_col), Variable(ys_class)
 
-def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size, plotpath=None):
+def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, y_class, batch_size, plotpath=None):
+
+	# evaluates both colorization and classification for every epoch
+
 	correct = 0.0
 	total = 0.0
-	losses = []
-	for i, (xs, ys) in enumerate(get_batch(x_test_lab, y_test_lab, batch_size)):
-		x, y_true = get_torch_vars(xs, ys, gpu)
+	losses_col = []
+	losses_class = []
+	for i, (xs, ys_col, ys_class) in enumerate(get_batch_col_class(x_test_lab, y_test_lab,y_test_class, batch_size)):
+		x, y_true, y_class = get_torch_vars(xs, ys_col, ys_class, True)
 
-		# y_fake = G.forward(x)
+		# validation colorization
 		y_fake = G.forward(x, mode='colorization')
 		D_pred_fake = torch.mean(torch.mean(D.forward(y_fake), 2), 2)
 		G_GAN_loss = criterion_GAN(D_pred_fake, label_real)
 		G_L1 = criterion_L1(y_fake,y_true)
 		G_loss = alpha*G_GAN_loss + gamma*G_L1
+		losses_col.append(G_loss.data[0])
+
+		# validation classification
+		outputs = G.forward(x, mode = 'classification')
+		loss_class = criterion_class(outputs,y_class)
+		losses_class.append(loss_class.data[0])
 		
-		losses.append(G_loss.data[0])
 
 	if plotpath: # only plot if a path is provided
-		plot_lab(xs, ys, y_fake.detach().cpu().numpy(), plotpath)
+		plot_lab(xs, ys_col, y_fake.detach().cpu().numpy(), plotpath)
 
-	val_loss = np.mean(losses)
-	val_acc = 0
-	# val_acc = 100 * correct / total
-	return val_loss, val_acc
+	val_loss_col = np.mean(losses_col)
+	val_loss_class = np.mean(losses_class)
+
+	return val_loss_col, val_loss_class
 
 def gt_GAN_loss(batch_size, real, real_label=1.0, fake_label=0.0):
 	if real:
@@ -119,17 +128,16 @@ if __name__ == '__main__':
 	torch.set_num_threads(5)
 	
 	# SET ARGUMENTS-------------------------------------------------------
-	experiment = "GAN__cutstomUNet_all"
+	experiment = "proposed_architecture"
 	# model = "UNet" # "CNN", "DUNet", "UNet"
 	categories = [airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck]
 	batch_size = 10
 	plot_images = True
-	n_epochs = 50
+	n_epochs = 150
 	save_model = True
 	model_path = os.path.join("./models", experiment)
 	if not os.path.exists(model_path):
 		os.makedirs(model_path)
-	validation = False # inference
 	num_filters = 128 
 	kernel_size = 3
 	seed = 0
@@ -194,8 +202,7 @@ if __name__ == '__main__':
 	train_losses_D = []
 	train_losses_G = []
 	train_losses_class = []
-	valid_losses_G = []
-	valid_accs = []
+	valid_losses_col = []
 	valid_losses_class = []
 	
 	for epoch in range(n_epochs):
@@ -208,30 +215,23 @@ if __name__ == '__main__':
 		losses_class = []
 		
 		# shuffle xs, ys_col, and ys_class at the beginning of each new epoch
-
+		print("shuffle training data")
+		p = npr.permutation(len(y_train_class))
+		x_train_lab = x_train_lab[p]
+		y_train_lab = y_train_lab[p]
+		y_train_class = y_train_class[p]
 		
-		for i, (xs, ys_col, ys_class) in enumerate(get_batch_col_class(x_train_lab,
-											   y_train_lab,
-											   y_train_class,
-											   batch_size)):
+		for i, (xs, ys_col, ys_class) in enumerate(get_batch_col_class(x_train_lab, y_train_lab, y_train_class, batch_size)):
+
 			x, y_true, y_class = get_torch_vars(xs,ys_col,ys_class, True)
-			print(i)
-			print(x.size())
-			print(y_true.size())
-			print(y_class.size())
-
-
+			
 			# decide if training colorization or classification arm
 			if i%2==0:
 				classification = False
-				print('classification:', classification)
 				colorization = True
-				print('colorization', colorization)
 			else:
 				classification = True
-				print('classification:', classification)
 				colorization = False
-				print('colorization', colorization)
 			"""
 			---------------------------------------------------------------------------
 			TRAINING
@@ -280,27 +280,28 @@ if __name__ == '__main__':
 				loss.backward()
 				G_optimizer.step()
 				losses_class.append(loss.data[0])
-			if i>1:
-				break
 	
-		break
-		"""
+		
+		
 		# plot training images
-		if plot_images:
+		if colorization and plot_images:
 			plot_lab(xs, ys, y_fake.detach().cpu().numpy(),
 				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
 
-		
-		# plot training images
+		# update losses for plotting
 		avg_loss_G = np.mean(losses_G)
 		avg_loss_D = np.mean(losses_D)
 
 		train_losses_D.append(avg_loss_D)
 		train_losses_G.append(avg_loss_G)
 
+		avg_loss_class = np.mean(losses_class)
+		train_losses_class.append(avg_loss_class)
+
+
 		time_elapsed = time.time() - start
-		print('Epoch [%d/%d], Loss_D: %.4f, Loss_G:, %.4f, Time (s): %d' % (
-			epoch+1, n_epochs, avg_loss_D, avg_loss_G,time_elapsed))
+		print('Epoch [%d/%d], Loss_D: %.4f, Loss_G:, %.4f, Loss_class:, %.4f, Time (s): %d' % (
+			epoch+1, n_epochs, avg_loss_D, avg_loss_G,avg_loss_class, time_elapsed))
 
 		# Evaluate the model
 		G.eval()
@@ -311,25 +312,27 @@ if __name__ == '__main__':
 		if plot_images:
 			outfile = os.path.join('outputs',experiment,'test_%d.png' % epoch)
 
-		val_loss, val_acc = run_validation_step(G,D,
+		val_loss_col, val_loss_class = run_validation_step(G,D,
 												criterion_GAN, criterion_L1,
 												x_test_lab,
 												y_test_lab,
+												y_test_class,
 												batch_size,
 												outfile)
 
 		time_elapsed = time.time() - start
-		valid_losses_G.append(val_loss)
-		valid_accs.append(val_acc)
-		print('Epoch [%d/%d], Val Loss: %.4f, Val Acc: %.1f%%, Time(s): %d' % (
-			epoch+1, n_epochs, val_loss, val_acc, time_elapsed))
+		valid_losses_col.append(val_loss_col)
+		valid_losses_class.append(val_loss_class)
+
+		print('Epoch [%d/%d], Val Colorization Loss: %.4f, Val Classification Loss: %.4f, Time(s): %d' % (
+			epoch+1, n_epochs, val_loss_col, val_loss_class, time_elapsed))
 		
 		if save_model:
 			if epoch%5 == 0:
 				print('Saving model...')
 				torch.save(G.state_dict(), os.path.join(model_path,'model'+str(epoch)+'.weights'))
-		"""
-	"""
+
+	
 	# Plot training curve
 	plt.plot(train_losses_G, "ro-", label="Train")
 	plt.plot(valid_losses_G, "go-", label="Validation")
@@ -346,8 +349,16 @@ if __name__ == '__main__':
 	plt.savefig(os.path.join("outputs",experiment, "training_curve_D.png"))
 	plt.close()
 
+	plt.plot(train_losses_class, "ro-", label="Train")
+	plt.plot(valid_losses_class, "go-", label="Validation")
+	plt.legend()
+	plt.title("Loss")
+	plt.xlabel("Epochs")
+	plt.savefig(os.path.join("outputs",experiment, "training_curve_classification.png"))
+	plt.close()
+
 	if save_model:
 		print('Saving model...')
 		torch.save(G.state_dict(), os.path.join(model_path,'model.weights'))
-	"""	
+	
 	
