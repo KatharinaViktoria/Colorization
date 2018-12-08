@@ -49,8 +49,7 @@ def get_torch_vars(xs, ys, gpu=False):
 		ys = torch.tensor(ys, device = device)
 	return Variable(xs), Variable(ys)
 
-def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size,
-						colour, plotpath=None):
+def run_validation_step(G, D, criterion_GAN, criterion_L1, x, y_true, batch_size, plotpath=None):
 	correct = 0.0
 	total = 0.0
 	losses = []
@@ -81,6 +80,7 @@ def gt_GAN_loss(batch_size, real, real_label=1.0, fake_label=0.0):
 		gt_tensor = torch.from_numpy(np.ones([batch_size,1])*fake_label).float()
 	gt_tensor = torch.tensor(gt_tensor, device=device)
 	return gt_tensor
+
 
 ######################################################################
 # MAIN
@@ -117,9 +117,6 @@ if __name__ == '__main__':
 	npr.seed(seed)
 
 	# LOAD THE COLOURS CATEGORIES
-	# colours = np.load(args.colours)[0]
-	# colours = np.load('colours/colour_kmeans24_cat7.npy')[0]
-	# num_colours = np.shape(colours)[0]
 	num_colours = 2 # number of output channels
 
 	#----------INITIALIZE NETWORKS, LOSSES, AND DATA-----------------------------
@@ -152,6 +149,9 @@ if __name__ == '__main__':
 	D_optimizer = optim.Adam(D.parameters(),lr=lr,betas=(beta1,beta2))
 
 
+
+
+
 	#  LOAD DATA
 	print("Loading data...")
 	(x_train, y_train), (x_test, y_test) = load_cifar10()
@@ -161,7 +161,7 @@ if __name__ == '__main__':
 	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=categories)
 	print(x_train_lab.shape)
 	print(y_train_lab.shape)
-	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=categories)
+	x_test_lab, y_test_lab = process_lab(x_test, y_test, categories=categories)
 
 	
 	print("Beginning training ...")
@@ -252,7 +252,6 @@ if __name__ == '__main__':
 												x_test_lab,
 												y_test_lab,
 												batch_size,
-												colours,
 												outfile)
 
 		time_elapsed = time.time() - start
