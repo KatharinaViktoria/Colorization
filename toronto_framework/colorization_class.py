@@ -284,9 +284,9 @@ if __name__ == '__main__':
 		
 		
 		# plot training images
-		if colorization and plot_images:
-			plot_lab(xs, ys, y_fake.detach().cpu().numpy(),
-				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
+		
+		plot_lab(xs, ys_col, y_fake.detach().cpu().numpy(),
+			 os.path.join('outputs', experiment,'train_%d.png' % epoch))
 
 		# update losses for plotting
 		avg_loss_G = np.mean(losses_G)
