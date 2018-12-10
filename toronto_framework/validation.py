@@ -47,8 +47,7 @@ import matplotlib
 matplotlib.use('Agg') # switch backend
 import matplotlib.pyplot as plt 
 from skimage import io, color
-
-
+import scipy.misc
 
 from load_data import load_cifar10
 from preprocessing import *
@@ -117,15 +116,15 @@ if __name__ == '__main__':
 	# baseline model
 	model_baseline = generator_copy.unet()
 	model_dir_baseline = "./models/GAN__cutstomUNet_all"
-	model_number_baseline = 30 # number of best model
+	model_number_baseline = 45 # number of best model
 	model_baseline.load_state_dict(torch.load(os.path.join(model_dir_baseline,'model'+str(model_number_baseline)+'.weights')))
 	model_baseline = model_baseline.to(device)
 	model_baseline.eval()
 	
-	# combined model
+	# combined model (proposed architecture classification and colorization)
 	model_combined = generator_copy.unet()
 	model_dir_combined = "./models/proposed_architecture"
-	model_number_combined = 30 # number of best model
+	model_number_combined = 145 # number of best model
 	model_combined.load_state_dict(torch.load(os.path.join(model_dir_combined,'model'+str(model_number_combined)+'.weights')))
 	model_combined = model_combined.to(device)
 	model_combined.eval()
@@ -147,16 +146,9 @@ if __name__ == '__main__':
 		pred_combined[(i*10):((i+1)*10),:,:,:] = y_combined.detach().cpu().numpy()
 
 # 5 postprocessing and prepare for export
-	# loop through single images
-	# pick out each single image (baseline and combined model)
-	# convert image to rgb
-	# save images separately: greyscale, rgb ground truth, rgb baseline, rgb combined model
-
-	# compare print function in preprocess.py
-	# pred_baseline = pred_baseline.detach().cpu().numpy()
-	# pred_combined = pred_combined.detach().cpu().numpy()
-
-	for image_index in range(x.shape[0]):
+	print(x.shape)
+	for image_index in range(x_test_set.shape[0]):
+		print(image_index)
 		grey = np.transpose(x_test_set[image_index,:,:,:], [1,2,0])
 		ground_truth = np.transpose(y_test_set[image_index,:,:,:], [1,2,0])
 		baseline = np.transpose(pred_baseline[image_index,:,:,:], [1,2,0])
@@ -178,7 +170,13 @@ if __name__ == '__main__':
 		baseline = color.lab2rgb(baseline)
 		combined = color.lab2rgb(combined)
 		grey =np.hstack(np.tile(grey, [1,1,1,3]))/100
-
+		
+		scipy.misc.toimage(grey, cmin=0, cmax=1).save(os.path.join(save_dir, "greyscale_"+str(image_index)+".jpg"))
+		scipy.misc.toimage(ground_truth, cmin=0, cmax=1).save(os.path.join(save_dir, "ground_truth_"+str(image_index)+".jpg"))
+		scipy.misc.toimage(baseline, cmin=0, cmax=1).save(os.path.join(save_dir, "baseline_"+str(image_index)+".jpg"))
+		scipy.misc.toimage(combined, cmin=0, cmax=1).save(os.path.join(save_dir, "combined_"+str(image_index)+".jpg"))
+		
+		'''
 		# save images separately
 		#grey
 		plt.imshow(grey)
@@ -199,23 +197,8 @@ if __name__ == '__main__':
 		plt.imshow(combined)
 		plt.savefig(os.path.join(save_dir, "combined_"+str(1)+".png"),dpi = 300)
 		plt.close()
-
-		break
-	'''
-	
-	if RGB:
-	  predicted = color.lab2rgb(predicted)
-	  gt = color.lab2rgb(gt)
-	  grey =np.hstack(np.tile(grey, [1,1,1,3]))/100
-
-	
-	img = np.vstack([grey,gt,predicted])
-	
-	plt.figure(figsize=(30, 100))
-	plt.imshow(img)
-	plt.savefig(path,dpi = 300)
-	plt.close()
-	'''
+		'''
+		
 
 
 
