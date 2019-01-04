@@ -1,10 +1,8 @@
 """
-Trains classification model as preliminary step for combined classification/colorization model (uses the classification part/arm of the combined classificaiton/colorization generator)
+Trains a U-Net model for colorization (uses the U-Net part of the combined classificaiton/colorization generator)
 adapted from University of Toronto's CSC321 programming assignment found here: http://www.cs.toronto.edu/~rgrosse/courses/csc321_2018/
 """
 
-from __future__ import print_function
-import argparse
 import os
 import math
 import numpy as np
@@ -22,9 +20,7 @@ import matplotlib.pyplot as plt
 
 from load_data import load_cifar10
 from preprocessing import *
-from models import *
-import unet
-import generator_copy
+import generator
 
 
 ######################################################################
@@ -44,23 +40,24 @@ def get_torch_vars(xs, ys, gpu=False):
 	  Variable(xs), Variable(ys)
 	"""
 	xs = torch.from_numpy(xs).float()
-	ys = torch.from_numpy(ys).long()
-	# ys = torch.from_numpy(ys).long()
+	ys = torch.from_numpy(ys).float()
 	if gpu:
-		# xs = xs.cuda()
-		# ys = ys.cuda()
 		xs = torch.tensor(xs, device=device)
 		ys = torch.tensor(ys, device = device)
 	return Variable(xs), Variable(ys)
 
-def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size):
+
+def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size, plotpath=None):
 	losses = []
-	for i, (xs, ys) in enumerate(get_batch_classification(x_test_lab, y_test_lab, batch_size)):
+	for i, (xs, ys) in enumerate(get_batch(x_test_lab, y_test_lab, batch_size)):
 		images, labels = get_torch_vars(xs, ys, gpu)
-		outputs = cnn.forward(images, mode='classification')
+		outputs = cnn.forward(images, mode='colorization')
+
 		val_loss = criterion(outputs,labels)
 		losses.append(val_loss.data[0])
 
+	if plotpath: # only plot if a path is provided
+		plot_lab(xs, ys, outputs.detach().cpu().numpy(), plotpath)
 	val_loss = np.mean(losses)
 	val_acc = 0
 	return val_loss, val_acc
@@ -71,13 +68,15 @@ def run_validation_step(cnn, criterion, x_test_lab, y_test_lab, batch_size):
 ######################################################################
 
 if __name__ == '__main__':
-	# Set the maximum number of threads to prevent crash in Teaching Labs
+	# Set the maximum number of threads 
 	torch.set_num_threads(5)
 	
 	# SET ARGUMENTS
-	experiment = "Unet_custom_class"
-	model = "UNet_class" 
+	experiment = "Unet_256_all"
+	categories = [airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck]
+	model = "UNet" # "CNN", "DUNet", "UNet"
 	batch_size = 100
+	plot_images = True
 	n_epochs = 50
 	save_model = True
 	model_path = os.path.join("./models", experiment)
@@ -104,32 +103,31 @@ if __name__ == '__main__':
 	# Numpy random seed
 	npr.seed(seed)
 
-	# LOAD THE COLOURS CATEGORIES
-	colours = np.load('colours/colour_kmeans24_cat7.npy')[0] # not neede but will break the code if removed....
-	num_colours = 2
+	
 
-	# LOAD THE MODEL
+	# LOAD THE MODEL (custom U-Net)
 	cnn = generator.unet()
 	print(cnn)
 
 	# LOSS FUNCTION
-	criterion = nn.CrossEntropyLoss().to(device)
-	optimizer = torch.optim.Adam(cnn.parameters(), lr=lr, betas=(beta1, beta2))
+	# criterion = nn.CrossEntropyLoss()
+	criterion = nn.L1Loss()
+	optimizer = torch.optim.Adam(cnn.parameters(), lr=lr,betas=(beta1,beta2))
 
 	# DATA
 	print("Loading data...")
 	(x_train, y_train), (x_test, y_test) = load_cifar10()
 
 	print("Transforming data...")
-	x_train, y_train = process_classification(x_train,y_train)
-	x_test, y_test = process_classification(x_test, y_test)
-	
-	print(x_train[1:10,:,:,:])
-	print(y_train[1:10])
-
+	x_train_lab, y_train_lab = process_lab(x_train, y_train, categories=categories)
+	print(x_train_lab.shape)
+	print(y_train_lab.shape)
+	x_test_lab, y_test_lab = process_lab(x_test, y_test,categories=categories)
+		
 	print("Beginning training ...")
 
 	# if args.gpu: cnn.cuda()
+	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	cnn.to(device)
 	start = time.time()
 
@@ -142,20 +140,25 @@ if __name__ == '__main__':
 		cnn.train() # Change model to 'train' mode
 		losses = []
 
-		for i, (xs, ys) in enumerate(get_batch_classification(x_train,
-											   y_train,
+		for i, (xs, ys) in enumerate(get_batch(x_train_lab,
+											   y_train_lab,
 											   batch_size)):
 			images, labels = get_torch_vars(xs,ys, True)
 			# Forward + Backward + Optimize
 			optimizer.zero_grad()
-
-			outputs = cnn.forward(images, mode = 'classification')
+			outputs = cnn.forward(images, mode='colorization')
 			loss = criterion(outputs,labels)
 			loss.backward()
 			optimizer.step()
 			losses.append(loss.data[0])
+
+		# plot training images
+		if plot_images:
+			plot_lab(xs, ys, outputs.detach().cpu().numpy(),
+				 os.path.join('outputs', experiment,'train_%d.png' % epoch))
+
 		
-		
+		# plot training images
 		avg_loss = np.mean(losses)
 		train_losses.append(avg_loss)
 		time_elapsed = time.time() - start
@@ -163,13 +166,18 @@ if __name__ == '__main__':
 			epoch+1, n_epochs, avg_loss, time_elapsed))
 
 		# Evaluate the model
-		cnn.eval()  # Change model to 'eval' mode (BN uses moving mean/var, no droput).
+		cnn.eval()  # Change model to 'eval' mode (BN uses moving mean/var).
+
+		outfile = None
+		if plot_images:
+			outfile = os.path.join('outputs',experiment,'test_%d.png' % epoch)
 
 		val_loss, val_acc = run_validation_step(cnn,
 												criterion,
-												x_test,
-												y_test,
-												batch_size)
+												x_test_lab,
+												y_test_lab,
+												batch_size,
+												outfile)
 
 		time_elapsed = time.time() - start
 		valid_losses.append(val_loss)
@@ -195,4 +203,5 @@ if __name__ == '__main__':
 	if save_model:
 		print('Saving model...')
 		torch.save(cnn.state_dict(), os.path.join(model_path,'model.weights'))
+	
 	

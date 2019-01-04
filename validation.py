@@ -3,59 +3,21 @@ validation of baseline and our proposed architecture
 prepare images for Turing test
 """
 
-
-"""
---------------TODO---------------------------------
-load both models 
-	- baseline
-	- new architecture
-
-load around 100 mixed images from the testing dataset
-preprocess (might have to adapte process function)
-
-shuffle them
-predict both batches using the baseline and the new architecture
-plot them side by side
-	- for the Turing test: in pairs 
-			baseline
-			new architecture
-	- for the write-up: all 4
-			input (l channel)
-			ground truth
-			baseline
-			new architecture
-
-
-
-___________________________________________________
-"""
-
-
-import argparse
 import os
-import math
 import numpy as np
 import numpy.random as npr
 import scipy.misc
-import time
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 from torch.autograd import Variable
-import matplotlib
-matplotlib.use('Agg') # switch backend
-import matplotlib.pyplot as plt 
 from skimage import io, color
 import scipy.misc
 
 from load_data import load_cifar10
 from preprocessing import *
 from models import *
-import unet
-import generator_copy
-from pix2pix_models_copy import *
-
+import generator
 
 ######################################################################
 # Torch Helper
@@ -79,7 +41,7 @@ def get_torch_vars(xs, ys, gpu=False):
 
 if __name__ == '__main__':
 
-	# 0 setup
+	# SETUP
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	print("using ", device)
 
@@ -114,7 +76,7 @@ if __name__ == '__main__':
 	print("...loading models...")
 
 	# baseline model
-	model_baseline = generator_copy.unet()
+	model_baseline = generator.unet()
 	model_dir_baseline = "./models/GAN__cutstomUNet_all"
 	model_number_baseline = 45 # number of best model
 	model_baseline.load_state_dict(torch.load(os.path.join(model_dir_baseline,'model'+str(model_number_baseline)+'.weights')))
@@ -122,7 +84,7 @@ if __name__ == '__main__':
 	model_baseline.eval()
 	
 	# combined model (proposed architecture classification and colorization)
-	model_combined = generator_copy.unet()
+	model_combined = generator.unet()
 	model_dir_combined = "./models/proposed_architecture"
 	model_number_combined = 145 # number of best model
 	model_combined.load_state_dict(torch.load(os.path.join(model_dir_combined,'model'+str(model_number_combined)+'.weights')))
@@ -145,7 +107,7 @@ if __name__ == '__main__':
 		y_combined = model_combined.forward(x, mode="colorization")
 		pred_combined[(i*10):((i+1)*10),:,:,:] = y_combined.detach().cpu().numpy()
 
-# 5 postprocessing and prepare for export
+# POSTPROCESSING AND SAVING
 	print(x.shape)
 	for image_index in range(x_test_set.shape[0]):
 		print(image_index)
@@ -175,32 +137,3 @@ if __name__ == '__main__':
 		scipy.misc.toimage(ground_truth, cmin=0, cmax=1).save(os.path.join(save_dir, "ground_truth_"+str(image_index)+".jpg"))
 		scipy.misc.toimage(baseline, cmin=0, cmax=1).save(os.path.join(save_dir, "baseline_"+str(image_index)+".jpg"))
 		scipy.misc.toimage(combined, cmin=0, cmax=1).save(os.path.join(save_dir, "combined_"+str(image_index)+".jpg"))
-		
-		'''
-		# save images separately
-		#grey
-		plt.imshow(grey)
-		plt.savefig(os.path.join(save_dir, "greyscale_"+str(1)+".png"),dpi = 300)
-		plt.close()
-
-		# ground truth
-		plt.imshow(ground_truth)
-		plt.savefig(os.path.join(save_dir, "ground_truth_"+str(1)+".png"),dpi = 300)
-		plt.close()
-
-		# baseline
-		plt.imshow(baseline)
-		plt.savefig(os.path.join(save_dir, "baseline_"+str(1)+".png"),dpi = 300)
-		plt.close()
-
-		# combined model
-		plt.imshow(combined)
-		plt.savefig(os.path.join(save_dir, "combined_"+str(1)+".png"),dpi = 300)
-		plt.close()
-		'''
-		
-
-
-
-
-
